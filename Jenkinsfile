@@ -36,11 +36,16 @@ pipeline {
             }
       } */
     stage('AWS-Login') {
-      steps {
-        withCredentials([aws(accessKeyVariable: 'AWS_ACCESS_KEY_ID', credentialsId: 'awslogin', secretKeyVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-         }
-      }
+  steps {
+    withCredentials([usernamePassword(credentialsId: 'awslogin', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+      sh '''
+        echo "Logged in to AWS CLI"
+        aws sts get-caller-identity
+      '''
     }
+  }
+}
+
     stage('setting the Kubernetes Cluster') {
       steps {
         dir('terraform_files'){
