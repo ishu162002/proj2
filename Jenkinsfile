@@ -5,7 +5,7 @@ pipeline {
     stage('Git Checkout') {
       steps {
         echo 'This stage is to clone the repo from github'
-        git branch: 'master', url: https: "github.com/ishu162002/star-agile-health-care.git"
+        git branch: 'master', url: "https://github.com/ishu162002/star-agile-health-care.git"
                         }
             }
     stage('Create Package') {
