@@ -1,79 +1,88 @@
 pipeline {
-  agent any
-          
-  stages {
-    stage('Git Checkout') {
-      steps {
-        echo 'This stage is to clone the repo from github'
-        git branch: 'master', url: "https://github.com/ishu162002/star-agile-health-care.git"
-                        }
-            }
-    stage('Create Package') {
-      steps {
-        echo 'This stage will compile, test, package my application'
-        sh 'mvn package'
-                          }
-            }
+    agent any
     
-    /* stage('Create Docker Image') {
-      steps {
-        echo 'This stage will Create a Docker image'
-        sh 'docker build -t ishu162002/healthcare:1.0 .'
-                          }
-            }
-     stage('Docker-Login') {
-           steps {
-              withCredentials([usernamePassword(credentialsId: 'dockercreds', passwordVariable: 'dockerpassword', usernameVariable: 'dockerlogin')]) {
-               sh 'docker login -u ${dockerlogin} -p ${dockerpassword}'
-                             
-                        }
-                }
-}
-    stage('Docker Push-Image') {
-      steps {
-        echo 'This stage will push my new image to the dockerhub'
-        sh 'docker push ishu162002/healthcare:1.0'
-            }
-      } */
-    stage('AWS-Login') {
-  steps {
-    withCredentials([usernamePassword(credentialsId: 'awslogin', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-      sh '''
-        echo "Logged in to AWS CLI"
-        aws sts get-caller-identity
-      '''
+    environment {
+        PROJECT_ID = 'arched-proton-477313-g2'   // <-- replace with your actual GCP project ID
+        IMAGE_NAME = 'healthcare'
+        IMAGE_TAG = 'v1.0'
+        REGION = 'us-central1'               // <-- replace with your VM/cluster region
+        CLUSTER_NAME = 'medicure-test-cluster'
     }
-  }
-}
 
-    stage('setting the Kubernetes Cluster') {
-      steps {
-        dir('terraform_files'){
-          sh 'terraform init'
-          sh 'terraform validate'
-          sh 'terraform apply --auto-approve'
-          sh 'sleep 20'
+    stages {
+        stage('Git Checkout') {
+            steps {
+                echo 'Cloning the Medicure microservice repo from GitHub...'
+                git branch: 'master', url: 'https://github.com/ishu162002/star-agile-health-care.git'
+            }
         }
-      }
+
+        stage('Build and Package') {
+            steps {
+                echo 'Building the Maven project...'
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                echo 'Building Docker image...'
+                sh '''
+                    docker build -t gcr.io/$PROJECT_ID/$IMAGE_NAME:$IMAGE_TAG .
+                '''
+            }
+        }
+
+        stage('Authenticate GCP and Push Docker Image') {
+            steps {
+                withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    sh '''
+                        echo "Authenticating to GCP..."
+                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                        gcloud config set project $PROJECT_ID
+
+                        echo "Pushing image to Google Container Registry..."
+                        gcloud auth configure-docker gcr.io --quiet
+                        docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:$IMAGE_TAG
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy to Kubernetes Cluster') {
+            steps {
+                withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    sh '''
+                        echo "Getting GKE credentials..."
+                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                        gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $PROJECT_ID
+                        
+                        echo "Deploying to Kubernetes..."
+                        kubectl apply -f k8s/deployment.yml
+                        kubectl apply -f k8s/service.yml
+                    '''
+                }
+            }
+        }
+
+        stage('Post Deployment Verification') {
+            steps {
+                echo 'Verifying Kubernetes Deployment...'
+                sh '''
+                    kubectl get pods
+                    kubectl get svc
+                '''
+            }
+        }
     }
-    stage('deploy kubernetes'){
-steps{
-  sh 'sudo chmod 600 ./terraform_files/sir.pem'    
-  sh 'minikube start'
-  sh 'sleep 30'
-  sh 'sudo scp -o StrictHostKeyChecking=no -i ./terraform_files/sir.pem deployment.yml ubuntu@172.31.17.230:/home/ubuntu/'
-  sh 'sudo scp -o StrictHostKeyChecking=no -i ./terraform_files/sir.pem service.yml ubuntu@172.31.17.230:/home/ubuntu/'
-script{
-  try{
-  sh 'ssh -o StrictHostKeyChecking=no -i ./terraform_files/sir.pem ubuntu@172.31.17.230 kubectl apply -f .'
-  }catch(error)
-  {
-  sh 'ssh -o StrictHostKeyChecking=no -i ./terraform_files/sir.pem ubuntu@172.31.17.230 kubectl apply -f .'
-  }
-}
-}
-}
-  }
+
+    post {
+        success {
+            echo '✅ Deployment Successful on GCP Kubernetes Cluster!'
+        }
+        failure {
+            echo '❌ Pipeline Failed. Check logs for errors.'
+        }
+    }
 }
 
-    
