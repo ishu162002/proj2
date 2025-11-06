@@ -16,7 +16,7 @@ spec:
     spec:
        containers:
          - name: medicure
-           image: pratap1371/healthcare:1.0
+           image: ishupurwar/healthcare:1.0
            ports:
              - containerPort: 8082
                name: http-web-app-01
