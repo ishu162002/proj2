@@ -49,32 +49,35 @@ pipeline {
             }
         }
 
-        stage('Deploy to Kubernetes Cluster') {
-            steps {
-                withCredentials([file(credentialsId: 'GCP_SERVICE_ACCOUNT_KEY', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    sh """
-                        echo "Getting GKE credentials..."
-                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
-                        gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $PROJECT_ID
+       stage('Deploy to Kubernetes Cluster') {
+    steps {
+        echo "Deploying application to GKE..."
 
-                        echo "Deploying to Kubernetes..."
-                        kubectl apply -f deployment.yml
-                        kubectl apply -f k8s/service.yml
-                    """
-                }
-            }
-        }
+        withCredentials([file(credentialsId: 'GCP_SERVICE_ACCOUNT_KEY', variable: 'GOOGLE_CRED')]) {
+            sh '''
+                echo "Activating GCP Service Account..."
+                gcloud auth activate-service-account --key-file=$GOOGLE_CRED
+                gcloud container clusters get-credentials medicure-test-cluster --region us-central1 --project arched-proton-477313-g2
 
-        stage('Post Deployment Verification') {
-            steps {
-                echo 'Verifying Kubernetes Deployment...'
-                sh '''
-                    kubectl get pods
-                    kubectl get svc
-                '''
-            }
+                echo "Deploying to Kubernetes..."
+                # Correct absolute paths
+                kubectl apply -f ~/star-agile-health-care/deployment.yml
+                kubectl apply -f ~/star-agile-health-care/k8s/service.yml
+            '''
         }
     }
+}
+
+     stage('Post Deployment Verification') {
+    steps {
+        echo 'Verifying Kubernetes Deployment...'
+        sh '''
+            kubectl get pods -o wide
+            kubectl get svc
+        '''
+    }
+}
+
 
     post {
         success {
