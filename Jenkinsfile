@@ -36,7 +36,6 @@ pipeline {
         stage('Authenticate to GCP') {
             steps {
                 withCredentials([file(credentialsId: 'GCP_SERVICE_ACCOUNT_KEY', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    // Directly use the credentials file, no cp needed
                     sh 'gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS'
                     sh "gcloud config set project ${PROJECT_ID}"
                 }
@@ -49,35 +48,34 @@ pipeline {
             }
         }
 
-       stage('Deploy to Kubernetes Cluster') {
-    steps {
-        echo "Deploying application to GKE..."
+        stage('Deploy to Kubernetes Cluster') {
+            steps {
+                echo "Deploying application to GKE..."
 
-        withCredentials([file(credentialsId: 'GCP_SERVICE_ACCOUNT_KEY', variable: 'GOOGLE_CRED')]) {
-            sh '''
-                echo "Activating GCP Service Account..."
-                gcloud auth activate-service-account --key-file=$GOOGLE_CRED
-                gcloud container clusters get-credentials medicure-test-cluster --region us-central1 --project arched-proton-477313-g2
+                withCredentials([file(credentialsId: 'GCP_SERVICE_ACCOUNT_KEY', variable: 'GOOGLE_CRED')]) {
+                    sh '''
+                        echo "Activating GCP Service Account..."
+                        gcloud auth activate-service-account --key-file=$GOOGLE_CRED
+                        gcloud container clusters get-credentials medicure-test-cluster --region us-central1 --project arched-proton-477313-g2
 
-                echo "Deploying to Kubernetes..."
-                # Correct absolute paths
-                kubectl apply -f ~/star-agile-health-care/deployment.yml
-                kubectl apply -f ~/star-agile-health-care/service.yml
-            '''
+                        echo "Deploying to Kubernetes..."
+                        kubectl apply -f ~/star-agile-health-care/deployment.yml
+                        kubectl apply -f ~/star-agile-health-care/service.yml
+                    '''
+                }
+            }
         }
-    }
-}
 
-     stage('Post Deployment Verification') {
-    steps {
-        echo 'Verifying Kubernetes Deployment...'
-        sh '''
-            kubectl get pods -o wide
-            kubectl get svc
-        '''
-    }
-}
-
+        stage('Post Deployment Verification') {
+            steps {
+                echo 'Verifying Kubernetes Deployment...'
+                sh '''
+                    kubectl get pods -o wide
+                    kubectl get svc
+                '''
+            }
+        }
+    }  // ✅ this closes the stages block
 
     post {
         success {
@@ -87,4 +85,4 @@ pipeline {
             echo '❌ Pipeline Failed. Check logs for errors.'
         }
     }
-}
+}  // ✅ this closes the entire pipeline block
