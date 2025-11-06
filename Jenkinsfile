@@ -2,7 +2,6 @@ pipeline {
     agent any
     
     environment {
-        GOOGLE_APPLICATION_CREDENTIALS = "${WORKSPACE}/gcp-key.json"
         PATH = "/usr/local/bin:/usr/bin:/bin:${env.PATH}"
         PROJECT_ID = 'arched-proton-477313-g2'
         IMAGE_NAME = 'healthcare'
@@ -29,42 +28,39 @@ pipeline {
         stage('Build Docker Image') {
             steps {
                 dir("${WORKSPACE}") { 
-                    sh 'docker build -t ishupurwar/healthcare:latest .'
+                    sh "docker build -t ishupurwar/${IMAGE_NAME}:${IMAGE_TAG} ."
                 }
             }
         }
 
         stage('Authenticate to GCP') {
             steps {
-                // Write the service account key from Jenkins credentials to a file
-                withCredentials([file(credentialsId: 'GCP_SERVICE_ACCOUNT_KEY', variable: 'KEY_FILE')]) {
-                    sh 'cp $KEY_FILE $GOOGLE_APPLICATION_CREDENTIALS'
+                withCredentials([file(credentialsId: 'GCP_SERVICE_ACCOUNT_KEY', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+                    // Directly use the credentials file, no cp needed
+                    sh 'gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS'
+                    sh "gcloud config set project ${PROJECT_ID}"
                 }
-
-                // Authenticate to GCP
-                sh 'gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS'
-                sh "gcloud config set project ${PROJECT_ID}"
             }
         }
 
         stage('Do GCP stuff') {
             steps {
-                sh 'gcloud compute instances list' // Example command
+                sh 'gcloud compute instances list'
             }
         }
 
         stage('Deploy to Kubernetes Cluster') {
             steps {
                 withCredentials([file(credentialsId: 'GCP_SERVICE_ACCOUNT_KEY', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    sh '''
+                    sh """
                         echo "Getting GKE credentials..."
                         gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
                         gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $PROJECT_ID
-                        
+
                         echo "Deploying to Kubernetes..."
                         kubectl apply -f k8s/deployment.yml
                         kubectl apply -f k8s/service.yml
-                    '''
+                    """
                 }
             }
         }
