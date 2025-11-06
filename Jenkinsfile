@@ -59,8 +59,9 @@ pipeline {
                         gcloud container clusters get-credentials medicure-test-cluster --region us-central1 --project arched-proton-477313-g2
 
                         echo "Deploying to Kubernetes..."
-                        kubectl apply -f ~/star-agile-health-care/deployment.yml
-                        kubectl apply -f ~/star-agile-health-care/service.yml
+                        kubectl apply -f ${WORKSPACE}/deployment.yml
+                        kubectl apply -f ${WORKSPACE}/service.yml
+
                     '''
                 }
             }
