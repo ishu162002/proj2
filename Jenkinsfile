@@ -58,7 +58,7 @@ pipeline {
                         gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $PROJECT_ID
 
                         echo "Deploying to Kubernetes..."
-                        kubectl apply -f k8s/deployment.yml
+                        kubectl apply -f deployment.yml
                         kubectl apply -f k8s/service.yml
                     """
                 }
