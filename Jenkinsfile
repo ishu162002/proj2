@@ -62,7 +62,7 @@ pipeline {
                 echo "Deploying to Kubernetes..."
                 # Correct absolute paths
                 kubectl apply -f ~/star-agile-health-care/deployment.yml
-                kubectl apply -f ~/star-agile-health-care/k8s/service.yml
+                kubectl apply -f ~/star-agile-health-care/service.yml
             '''
         }
     }
