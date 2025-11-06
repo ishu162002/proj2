@@ -33,20 +33,24 @@ pipeline {
     }
 }
         stage('Authenticate GCP and Push Docker Image') {
-            steps {
-                withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    sh '''
-                        echo "Authenticating to GCP..."
-                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
-                        gcloud config set project $PROJECT_ID
+    steps {
+        withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
+            sh '''
+                echo "Authenticating to GCP..."
+                gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
+                gcloud config set project $PROJECT_ID
 
-                        echo "Pushing image to Google Container Registry..."
-                        gcloud auth configure-docker gcr.io --quiet
-                       docker push ishupurwar/healthcare:latest
-                    '''
-                }
-            }
+                echo "Tagging Docker image for GCR..."
+                docker tag ishupurwar/healthcare:latest gcr.io/$PROJECT_ID/$IMAGE_NAME:$IMAGE_TAG
+
+                echo "Pushing image to GCR..."
+                gcloud auth configure-docker gcr.io --quiet
+                docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:$IMAGE_TAG
+            '''
         }
+    }
+}
+
 
         stage('Deploy to Kubernetes Cluster') {
             steps {
