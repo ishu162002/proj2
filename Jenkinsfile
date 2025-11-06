@@ -2,6 +2,7 @@ pipeline {
     agent any
     
     environment {
+        GOOGLE_APPLICATION_CREDENTIALS = "${WORKSPACE}/gcp-key.json"
         PATH = "/usr/local/bin:/usr/bin:/bin:${env.PATH}"
         PROJECT_ID = 'arched-proton-477313-g2'   // <-- replace with your actual GCP project ID
         IMAGE_NAME = 'healthcare'
@@ -32,24 +33,28 @@ pipeline {
         }
     }
 }
-        stage('Authenticate GCP and Push Docker Image') {
-    steps {
-        withCredentials([file(credentialsId: 'gcp-service-account', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-            sh '''
-                echo "Authenticating to GCP..."
-                gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
-                gcloud config set project $PROJECT_ID
+         stages {
+        stage('Authenticate to GCP') {
+            steps {
+                // Write the service account key from Jenkins credentials to a file
+                withCredentials([file(credentialsId: 'GCP_SERVICE_ACCOUNT_KEY', variable: 'KEY_FILE')]) {
+                    sh 'cp $KEY_FILE $GOOGLE_APPLICATION_CREDENTIALS'
+                }
 
-                echo "Tagging Docker image for GCR..."
-                docker tag ishupurwar/healthcare:latest gcr.io/$PROJECT_ID/$IMAGE_NAME:$IMAGE_TAG
+                // Authenticate to GCP
+                sh 'gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS'
+                sh 'gcloud config set project YOUR_PROJECT_ID'
+            }
+        }
 
-                echo "Pushing image to GCR..."
-                gcloud auth configure-docker gcr.io --quiet
-                docker push gcr.io/$PROJECT_ID/$IMAGE_NAME:$IMAGE_TAG
-            '''
+        stage('Do GCP stuff') {
+            steps {
+                sh 'gcloud compute instances list' // Example command
+            }
         }
     }
 }
+
 
 
         stage('Deploy to Kubernetes Cluster') {
