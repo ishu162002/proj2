@@ -1,6 +1,6 @@
 pipeline {
     agent any
-    
+
     environment {
         GOOGLE_APPLICATION_CREDENTIALS = "${WORKSPACE}/gcp-key.json"
         PATH = "/usr/local/bin:/usr/bin:/bin:${env.PATH}"
@@ -28,44 +28,59 @@ pipeline {
 
         stage('Build Docker Image') {
             steps {
-                dir("${WORKSPACE}") { 
-                    sh 'docker build -t ishupurwar/healthcare:latest .'
+                dir("${WORKSPACE}") {
+                    sh "docker build -t ishupurwar/${IMAGE_NAME}:${IMAGE_TAG} ."
                 }
             }
         }
 
         stage('Authenticate to GCP') {
             steps {
-                // Write the service account key from Jenkins credentials to a file
                 withCredentials([file(credentialsId: 'GCP_SERVICE_ACCOUNT_KEY', variable: 'KEY_FILE')]) {
                     sh 'cp $KEY_FILE $GOOGLE_APPLICATION_CREDENTIALS'
                 }
-
-                // Authenticate to GCP
                 sh 'gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS'
                 sh "gcloud config set project ${PROJECT_ID}"
             }
         }
 
-        stage('Do GCP stuff') {
+        stage('Ensure GKE Cluster Exists') {
             steps {
-                sh 'gcloud compute instances list' // Example command
+                echo "Checking if GKE cluster ${CLUSTER_NAME} exists..."
+                script {
+                    def clusterExists = sh(
+                        script: "gcloud container clusters list --region ${REGION} --project ${PROJECT_ID} --filter='name=${CLUSTER_NAME}' --format='value(name)'",
+                        returnStdout: true
+                    ).trim()
+
+                    if (clusterExists == "") {
+                        echo "Cluster not found. Creating GKE cluster..."
+                        sh """
+                            gcloud container clusters create ${CLUSTER_NAME} \
+                                --region ${REGION} \
+                                --num-nodes 3 \
+                                --project ${PROJECT_ID}
+                        """
+                    } else {
+                        echo "Cluster ${CLUSTER_NAME} already exists."
+                    }
+                }
             }
         }
 
-        stage('Deploy to Kubernetes Cluster') {
+        stage('Get GKE Credentials') {
             steps {
-                withCredentials([file(credentialsId: 'GCP_SERVICE_ACCOUNT_KEY', variable: 'GOOGLE_APPLICATION_CREDENTIALS')]) {
-                    sh '''
-                        echo "Getting GKE credentials..."
-                        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS
-                        gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION --project $PROJECT_ID
-                        
-                        echo "Deploying to Kubernetes..."
-                        kubectl apply -f k8s/deployment.yml
-                        kubectl apply -f k8s/service.yml
-                    '''
-                }
+                sh "gcloud container clusters get-credentials ${CLUSTER_NAME} --region ${REGION} --project ${PROJECT_ID}"
+            }
+        }
+
+        stage('Deploy to Kubernetes') {
+            steps {
+                echo 'Deploying to Kubernetes...'
+                sh '''
+                    kubectl apply -f k8s/deployment.yml
+                    kubectl apply -f k8s/service.yml
+                '''
             }
         }
 
@@ -89,3 +104,4 @@ pipeline {
         }
     }
 }
+
